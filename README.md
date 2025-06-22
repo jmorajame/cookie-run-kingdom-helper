@@ -48,4 +48,8 @@ The executable includes:
 - The bot uses image recognition to find and click buttons
 - Make sure your game is in the correct screen before starting any automation
 - The bot will automatically handle popups and rewards
-- Keep your device screen on while the bot is running 
+- Keep your device screen on while the bot is running
+
+## Download
+
+[Download the latest .exe here](https://github.com/jmorajame/cookie-run-kingdom-helper/releases/latest) 
