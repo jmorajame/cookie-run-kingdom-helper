@@ -1,0 +1,58 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Installer logs
+debug.log
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+*.manifest
+*.spec
+
+# Installer executables
+*.exe
+*.dll
+*.msi
+*.app
+*.deb
+*.rpm
+*.dmg
+*.pkg
+
+# Platform tools
+platform-tools/*.exe
+platform-tools/*.dll
+
+# Images and screenshots
+screen.png
+
+# Mac OS
+.DS_Store
+
+# VSCode
+.vscode/ 
