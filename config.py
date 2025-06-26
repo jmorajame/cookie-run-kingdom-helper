@@ -84,4 +84,54 @@ def get_tesseract_path():
         "Could not find Tesseract executable. Please either:\n"
         "1. Install Tesseract-OCR in the default location\n"
         "2. Set the COOKIE_RUN_TESSERACT_PATH environment variable to point to your tesseract executable"
-    ) 
+    )
+
+# Hardcoded icon filenames for PyInstaller compatibility
+CASTLE_RESEARCH_ICON_NAMES = [
+    "bakery_production.png",
+    "biscuit_production.png",
+    "cake_roll_production.png",
+    "cookie_house_production.png",
+    "sugar_gnome_craftmanship.png",
+    "sugar_production.png",
+    "tools_production.png",
+    "wood_production.png",
+    "yam_production.png",
+    "yelly_bean_production.png",
+    "yelly_berry_production.png",
+]
+
+MATERIAL_ICON_NAMES = [
+    "axe.png",
+    "pickaxe.png",
+    "required_pickaxe.png",
+    "required_saw.png",
+    "required_shovel.png",
+    "saw.png",
+    "shovel.png",
+]
+
+COOKIE_RESEARCH_ICON_NAMES = [
+    "increase_def_attacker_slot.png",
+    "increase_hp_ambush_slot.png",
+    "increase_hp_attacker_slot.png",
+    "increase_hp_bomber_slot.png",
+    "increase_hp_defender_slot.png",
+    "increase_hp_healer_slot.png",
+    "increase_hp_magic_slot.png",
+    "increase_hp_ranger_slot.png",
+    "increase_hp_support_slot.png",
+    "increase_overall_hp.png",
+]
+
+def get_castle_research_icons():
+    from config import get_resource_path
+    return [get_resource_path(os.path.join("castle_research_icons", name)) for name in CASTLE_RESEARCH_ICON_NAMES]
+
+def get_material_icons():
+    from config import get_resource_path
+    return [get_resource_path(os.path.join("material_icons", name)) for name in MATERIAL_ICON_NAMES]
+
+def get_cookie_research_icons():
+    from config import get_resource_path
+    return [get_resource_path(os.path.join("cookie_research_icons", name)) for name in COOKIE_RESEARCH_ICON_NAMES] 

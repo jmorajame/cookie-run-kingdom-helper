@@ -11,7 +11,7 @@ import config
 from simple_material_production import run_material_production_loop
 from auto_research_material import auto_research_material
 
-CURRENT_VERSION = "v1.0.5"
+CURRENT_VERSION = "v1.0.6"
 
 # === Global Control Flags ===
 event_thread = None
@@ -670,7 +670,7 @@ material_desc.grid(row=1, column=0, columnspan=2, sticky="w", padx=(20, 5), pady
 research_row = ctk.CTkFrame(materials_tab)
 research_row.pack(fill="x", pady=(5, 0))
 research_row.grid_columnconfigure(0, weight=1)
-research_name = ctk.CTkLabel(research_row, text="Auto research (pickaxe)", anchor="w", font=(FONT_FAMILY, 14))
+research_name = ctk.CTkLabel(research_row, text="Auto research (อาณาจักร) WIP", anchor="w", font=(FONT_FAMILY, 14))
 research_name.grid(row=0, column=0, sticky="w", padx=(20, 5), pady=2)
 
 research_stop_flag = threading.Event()
@@ -694,7 +694,7 @@ research_switch = ctk.CTkSwitch(research_row, text="", command=research_switch_e
 research_switch.grid(row=0, column=1, sticky="e", padx=(5, 0), pady=2)
 research_desc = ctk.CTkLabel(
     research_row,
-    text="วนเช็คและผลิต pickaxe สำหรับวิจัยอัตโนมัติ",
+    text="เช็ควิจัยอัตโนมัติและผลิตของสำหรับการวิจัย",
     font=(FONT_FAMILY, 12),
     text_color="#888888"
 )
