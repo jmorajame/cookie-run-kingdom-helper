@@ -124,6 +124,51 @@ COOKIE_RESEARCH_ICON_NAMES = [
     "increase_overall_hp.png",
 ]
 
+# Button images for PyInstaller compatibility
+BUTTON_IMAGES = [
+    "activity_button.png",
+    "alt_win_icon.png",
+    "available_to_research.png",
+    "bundle_close_button.png",
+    "castle_research_button.png",
+    "check_button.png",
+    "collect_gnome.png",
+    "confirm_button.png",
+    "confirm_gnome_upgrade_button.png",
+    "continue_event_button.png",
+    "continue_research_button.png",
+    "cookie_research_button.png",
+    "destroy_button.png",
+    "exit_button.png",
+    "level_8_icon.png",
+    "level_up_continue_button.png",
+    "management_button.png",
+    "next_episode_button.png",
+    "next_floor_button.png",
+    "next_stage_button.png",
+    "next_stage_icon.png",
+    "next_stage_logo.png",
+    "not_available_to_research.png",
+    "not_enough_mats.png",
+    "prepare_button.png",
+    "production_management.png",
+    "quest_close_button.png",
+    "random_effect_button.png",
+    "receive_reward_button.png",
+    "ready_button.png",
+    "refill_all_button.png",
+    "refill_all_confirm_button.png",
+    "refill_all_icon.png",
+    "research_button.png",
+    "research_found_icon.png",
+    "research_lab_button.png",
+    "researching_icon.png",
+    "retry_button.png",
+    "skip_button.png",
+    "win_icon.png",
+    "zero_progress_icon.png",
+]
+
 def get_castle_research_icons():
     from config import get_resource_path
     return [get_resource_path(os.path.join("castle_research_icons", name)) for name in CASTLE_RESEARCH_ICON_NAMES]

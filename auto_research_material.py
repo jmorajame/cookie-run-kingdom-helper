@@ -259,27 +259,27 @@ def auto_research_material(stop_flag, device_serial, research_type="castle"):
         print("❌ Failed to click research_lab_button")
         return False
     
-    # Wait and check if castle_research_button appears, handle continue_research_button popups
-    print("[DEBUG] Checking for castle_research_button or continue_research_button popups...")
-    found_castle_research = False
+    # Wait and check if research_button appears, handle continue_research_button popups
+    print(f"[DEBUG] Checking for {research_button} or continue_research_button popups...")
+    found_research_button = False
     for attempt in range(10):
         if stop_flag and stop_flag.is_set():
             return False
         capture_screen(device_serial=device_serial)
-        if find_image_on_screen("castle_research_button.png"):
-            print(f"[DEBUG] Found castle_research_button on attempt {attempt+1}")
-            tap_with_fail_check("castle_research_button.png", device_serial, stop_flag)
-            found_castle_research = True
+        if find_image_on_screen(research_button):
+            print(f"[DEBUG] Found {research_button} on attempt {attempt+1}")
+            tap_with_fail_check(research_button, device_serial, stop_flag)
+            found_research_button = True
             break
         elif find_image_on_screen("continue_research_button.png"):
             print(f"[DEBUG] Found continue_research_button on attempt {attempt+1}, tapping it...")
             wait_and_tap("continue_research_button.png", device_serial=device_serial)
             time.sleep(0.5)
         else:
-            print(f"[DEBUG] Neither castle_research_button nor continue_research_button found on attempt {attempt+1}")
+            print(f"[DEBUG] Neither {research_button} nor continue_research_button found on attempt {attempt+1}")
             time.sleep(0.5)
-    if not found_castle_research:
-        print("❌ castle_research_button did not appear after clicking research_lab_button and handling popups")
+    if not found_research_button:
+        print(f"❌ {research_button} did not appear after clicking research_lab_button and handling popups")
         return False
     
     # Wait for research screen to load

@@ -668,6 +668,12 @@ material_thread = None
 def material_switch_event():
     global material_thread
     if material_switch.get():
+        if not check_adb_before_start():
+            material_switch.deselect()
+            return
+        # Stop other functions and clear log
+        stop_all_other_functions('material')
+        clear_log()
         material_stop_flag.clear()
         material_thread = threading.Thread(target=run_material_production_loop, args=(material_stop_flag, config.selected_device_serial), daemon=True)
         material_thread.start()
@@ -693,19 +699,46 @@ research_thread = None
 def research_switch_event():
     global research_thread
     if research_switch.get():
+        if not check_adb_before_start():
+            research_switch.deselect()
+            return
+        # Stop other functions and clear log
+        stop_all_other_functions('research')
+        clear_log()
         research_stop_flag.clear()
+        research_type = "cookie" if research_type_var.get() == "Cookie Research" else "castle"
         research_thread = threading.Thread(
             target=auto_research_material,
-            args=(research_stop_flag, config.selected_device_serial),
+            args=(research_stop_flag, config.selected_device_serial, research_type),
             daemon=True
         )
         research_thread.start()
     else:
         research_stop_flag.set()
-        print("🛑 หยุด Auto research (pickaxe)")
+        print("🛑 หยุด Auto research")
 
 research_switch = ctk.CTkSwitch(research_row, text="", command=research_switch_event, font=(FONT_FAMILY, 12))
 research_switch.grid(row=0, column=1, sticky="e", padx=(5, 0), pady=2)
+
+def on_research_type_change(value):
+    if research_switch.get():
+        research_switch.deselect()
+        research_stop_flag.set()
+        # Stop all other functions and clear log
+        stop_all_other_functions('research')
+        clear_log()
+        print("🛑 กำลังหยุด Auto research...")
+
+research_type_var = StringVar(value="Castle Research")
+research_type_segmented = ctk.CTkSegmentedButton(
+    research_row, 
+    values=["Castle Research", "Cookie Research"], 
+    variable=research_type_var, 
+    command=on_research_type_change,
+    font=(FONT_FAMILY, 12)
+)
+research_type_segmented.grid(row=2, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
+
 research_desc = ctk.CTkLabel(
     research_row,
     text="เช็ควิจัยอัตโนมัติและผลิตของสำหรับการวิจัย",
@@ -754,6 +787,16 @@ def stop_all_other_functions(current_function):
         garden_switch.deselect()
         garden_stop_flag.set()
         print("🛑 กำลังหยุด Auto Garden Event...")
+    
+    if current_function != 'material' and material_switch.get():
+        material_switch.deselect()
+        material_stop_flag.set()
+        print("🛑 กำลังหยุด Simple material production...")
+    
+    if current_function != 'research' and research_switch.get():
+        research_switch.deselect()
+        research_stop_flag.set()
+        print("🛑 กำลังหยุด Auto research...")
 
 # Optional: redirect print to the UI
 class Redirect:
