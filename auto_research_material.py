@@ -1,0 +1,517 @@
+import time
+import glob
+import os
+import cv2
+from utils import wait_and_tap, find_image_on_screen, capture_screen, adb_swipe, confirm_tap_until_button_disappears, clean_post_exit_popups
+
+# Dynamically find all research slot icons and material icons
+RESEARCH_SLOT_DIR = "cookie_research_icons"
+CASTLE_RESEARCH_DIR = "castle_research_icons"
+MATERIAL_ICON_DIR = "material_icons"
+research_slots = sorted(glob.glob(os.path.join(RESEARCH_SLOT_DIR, "*.png")))
+castle_research_icons = sorted(glob.glob(os.path.join(CASTLE_RESEARCH_DIR, "*.png")))
+material_icons = sorted(glob.glob(os.path.join(MATERIAL_ICON_DIR, "*.png")))
+
+def wait_for_image(image_name, device_serial, timeout=10, stop_flag=None):
+    """Wait for an image to appear on screen with timeout"""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if stop_flag and stop_flag.is_set():
+            return False
+        capture_screen(device_serial=device_serial)
+        if find_image_on_screen(image_name):
+            return True
+        time.sleep(0.5)
+    return False
+
+def wait_for_image_disappear(image_name, device_serial, timeout=10, stop_flag=None):
+    """Wait for an image to disappear from screen with timeout"""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if stop_flag and stop_flag.is_set():
+            return False
+        capture_screen(device_serial=device_serial)
+        if not find_image_on_screen(image_name):
+            return True
+        time.sleep(0.5)
+    return False
+
+def tap_with_fail_check(image_name, device_serial, stop_flag=None, max_attempts=5):
+    """Tap an image with fail check - returns True if successful"""
+    for attempt in range(max_attempts):
+        if stop_flag and stop_flag.is_set():
+            return False
+        capture_screen(device_serial=device_serial)
+        if find_image_on_screen(image_name):
+            wait_and_tap(image_name, device_serial=device_serial)
+            time.sleep(0.5)
+            return True
+        time.sleep(0.3)
+    print(f"❌ Failed to find and tap {image_name} after {max_attempts} attempts")
+    return False
+
+def close_popup_until_management(device_serial, stop_flag=None):
+    """Close popup by clicking quest_close_button until management_button appears"""
+    for attempt in range(20):
+        if stop_flag and stop_flag.is_set():
+            return False
+        capture_screen(device_serial=device_serial)
+        if find_image_on_screen("management_button.png"):
+            print("✅ Successfully closed popup and found management button")
+            return True
+        if find_image_on_screen("quest_close_button.png"):
+            wait_and_tap("quest_close_button.png", device_serial=device_serial)
+            time.sleep(0.3)
+        else:
+            time.sleep(0.3)
+    print("❌ Failed to close popup and find management button")
+    return False
+
+def find_required_material(device_serial, stop_flag=None):
+    """Find which material is required for research by checking material_icons"""
+    print("🔍 Starting material identification...")
+    print(f"🔍 Checking for materials: {[os.path.basename(icon) for icon in material_icons]}")
+    
+    # Search for material icons within the not_enough_mats popup
+    for attempt in range(3):
+        if stop_flag and stop_flag.is_set():
+            return None
+        
+        print(f"🔍 Material search attempt {attempt + 1}...")
+        capture_screen(device_serial=device_serial)
+        
+        for material_icon in material_icons:
+            if stop_flag and stop_flag.is_set():
+                return None
+            
+            material_name = os.path.basename(material_icon)
+            pos = find_image_on_screen(material_icon)
+            if pos:
+                print(f"🔍 Found required material: {material_name} at position {pos}")
+                return material_icon
+            else:
+                print(f"🔍 Material {material_name} not found on attempt {attempt + 1}")
+        
+        # If no materials found, wait a bit and try again
+        if attempt < 2:
+            print("🔍 No materials found, waiting and retrying...")
+            time.sleep(0.5)
+    
+    print("❌ Could not identify required material after multiple attempts")
+    print("🔍 This might be because:")
+    print("   - Material icons have different appearance than expected")
+    print("   - Material icons are positioned differently in the popup")
+    print("   - Screen capture failed")
+    print("   - Material icons are too small or unclear")
+    return None
+
+def scroll_and_find_and_produce(material_icon, device_serial, times=12, stop_flag=None):
+    """Scroll up to the top, then find the material icon, then click it multiple times at all found positions, including after a bonus short scroll."""
+    # Scroll up to the top first (longer and more times)
+    print("[DEBUG] Scrolling up to the top before searching for material icon...")
+    print(f"[DEBUG] stop_flag is set: {stop_flag.is_set() if stop_flag else False}")
+    for up_scroll in range(8):
+        if stop_flag and stop_flag.is_set():
+            print(f"[DEBUG] stop_flag set during scroll up at iteration {up_scroll+1}")
+            return False
+        print(f"[DEBUG] Scroll up {up_scroll+1}/8: adb_swipe(480, 600, 480, 100, duration_ms=600)")
+        adb_swipe(480, 100, 480, 460, duration_ms=600, device_serial=device_serial)  # longer swipe from bottom to top
+        print(f"[DEBUG] Finished swipe {up_scroll+1}/8")
+        time.sleep(0.5)
+    # Capture and check for the material icon at the top
+    capture_screen(device_serial=device_serial)
+    from auto_research_material import find_all_images_on_screen
+    positions = find_all_images_on_screen(material_icon)
+    found_any = False
+    if positions:
+        print(f"พบไอคอน {material_icon} ที่ {positions} กำลังผลิต... (top after scroll up)")
+        for pos in positions:
+            for _ in range(times):
+                if stop_flag and stop_flag.is_set():
+                    return False
+                from utils import adb_tap
+                adb_tap(*pos, device_serial=device_serial)
+                time.sleep(0.02)
+        found_any = True
+        # Bonus short scroll and check again
+        print("[DEBUG] Bonus short scroll after first found batch...")
+        adb_swipe(480, 400, 480, 300, duration_ms=350, device_serial=device_serial)
+        time.sleep(0.7)
+        capture_screen(device_serial=device_serial)
+        positions2 = find_all_images_on_screen(material_icon)
+        if positions2:
+            print(f"[DEBUG] Bonus found {len(positions2)} more positions: {positions2}")
+            for pos in positions2:
+                for _ in range(times):
+                    if stop_flag and stop_flag.is_set():
+                        return False
+                    from utils import adb_tap
+                    adb_tap(*pos, device_serial=device_serial)
+                    time.sleep(0.02)
+        return True
+    # Now proceed with the original search logic (shorter scroll down)
+    for scroll_attempt in range(20):
+        if stop_flag and stop_flag.is_set():
+            return False
+        capture_screen(device_serial=device_serial)
+        positions = find_all_images_on_screen(material_icon)
+        if positions:
+            print(f"พบไอคอน {material_icon} ที่ {positions} กำลังผลิต...")
+            for pos in positions:
+                for _ in range(times):
+                    if stop_flag and stop_flag.is_set():
+                        return False
+                    from utils import adb_tap
+                    adb_tap(*pos, device_serial=device_serial)
+                    time.sleep(0.02)
+            # Bonus short scroll and check again
+            print("[DEBUG] Bonus short scroll after found batch in scroll loop...")
+            adb_swipe(480, 400, 480, 300, duration_ms=350, device_serial=device_serial)
+            time.sleep(0.7)
+            capture_screen(device_serial=device_serial)
+            positions2 = find_all_images_on_screen(material_icon)
+            if positions2:
+                print(f"[DEBUG] Bonus found {len(positions2)} more positions: {positions2}")
+                for pos in positions2:
+                    for _ in range(times):
+                        if stop_flag and stop_flag.is_set():
+                            return False
+                        from utils import adb_tap
+                        adb_tap(*pos, device_serial=device_serial)
+                        time.sleep(0.02)
+            return True
+        # Shorter scroll down to avoid skipping
+        print("เลื่อนลงเพื่อค้นหาไอคอนวัสดุ (short scroll)...")
+        adb_swipe(480, 400, 480, 300, duration_ms=350, device_serial=device_serial)
+        time.sleep(0.7)
+    print("❌ ไม่พบไอคอนวัสดุที่ต้องการ")
+    return False
+
+def find_all_images_on_screen(template_path, threshold=0.85):
+    """Find all instances of the template image on the current screen. Return list of (x, y) positions."""
+    import os
+    from config import get_resource_path
+    # Only prepend 'button-images/' if template_path does not contain a folder
+    if '/' not in template_path and '\\' not in template_path:
+        search_path = f"button-images/{template_path}"
+    else:
+        search_path = template_path
+    positions = []
+    try:
+        if not os.path.exists('screen.png'):
+            return []
+        screen = cv2.imread('screen.png', cv2.IMREAD_COLOR)
+        if screen is None:
+            return []
+        full_template_path = get_resource_path(search_path)
+        template = cv2.imread(full_template_path, cv2.IMREAD_COLOR)
+        if template is None:
+            return []
+        result = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
+        yloc, xloc = (result >= threshold).nonzero()
+        h, w = template.shape[:2]
+        seen = set()
+        for (x, y) in zip(xloc, yloc):
+            center = (x + w // 2, y + h // 2)
+            # Avoid duplicates (close points)
+            if all(abs(center[0] - sx) > 10 or abs(center[1] - sy) > 10 for (sx, sy) in seen):
+                positions.append(center)
+                seen.add(center)
+        return positions
+    except Exception as e:
+        print(f"[DEBUG] Error in find_all_images_on_screen: {e}")
+        return []
+
+def auto_research_material(stop_flag, device_serial, research_type="castle"):
+    """
+    Main auto research material function with proper fail checks
+    research_type: "castle" or "cookie"
+    """
+    print(f"🔄 เริ่มวนหาและผลิตวัสดุสำหรับวิจัย ({research_type})")
+    
+    # Determine which research icons to use
+    if research_type == "castle":
+        research_icons = castle_research_icons
+        research_button = "castle_research_button.png"
+    else:
+        research_icons = research_slots
+        research_button = "cookie_research_button.png"
+    
+    # 1. Click on activity_button (check research_lab_button if this button show up on screen)
+    print("1. Clicking activity_button...")
+    if not tap_with_fail_check("activity_button.png", device_serial, stop_flag):
+        print("❌ Failed to click activity_button")
+        return False
+    
+    # Wait and check if research_lab_button appears
+    if not wait_for_image("research_lab_button.png", device_serial, stop_flag=stop_flag):
+        print("❌ research_lab_button did not appear after clicking activity_button")
+        return False
+    
+    # 2. Click on research_lab_button (check castle_research_button)
+    print("2. Clicking research_lab_button...")
+    if not tap_with_fail_check("research_lab_button.png", device_serial, stop_flag):
+        print("❌ Failed to click research_lab_button")
+        return False
+    
+    # Wait and check if castle_research_button appears, handle continue_research_button popups
+    print("[DEBUG] Checking for castle_research_button or continue_research_button popups...")
+    found_castle_research = False
+    for attempt in range(10):
+        if stop_flag and stop_flag.is_set():
+            return False
+        capture_screen(device_serial=device_serial)
+        if find_image_on_screen("castle_research_button.png"):
+            print(f"[DEBUG] Found castle_research_button on attempt {attempt+1}")
+            tap_with_fail_check("castle_research_button.png", device_serial, stop_flag)
+            found_castle_research = True
+            break
+        elif find_image_on_screen("continue_research_button.png"):
+            print(f"[DEBUG] Found continue_research_button on attempt {attempt+1}, tapping it...")
+            wait_and_tap("continue_research_button.png", device_serial=device_serial)
+            time.sleep(0.5)
+        else:
+            print(f"[DEBUG] Neither castle_research_button nor continue_research_button found on attempt {attempt+1}")
+            time.sleep(0.5)
+    if not found_castle_research:
+        print("❌ castle_research_button did not appear after clicking research_lab_button and handling popups")
+        return False
+    
+    # Wait for research screen to load
+    time.sleep(2)
+    
+    # 4. Scroll to left side 5 times to make sure we're at the start
+    print("4. Scrolling to left side to start position...")
+    for scroll in range(5):
+        if stop_flag and stop_flag.is_set():
+            return False
+        adb_swipe(200, 400, 800, 400, duration_ms=800, device_serial=device_serial)
+        time.sleep(0.5)
+    
+    # 5-9. Find and click on research images
+    print("5-9. Searching for available research...")
+    found_research = False
+    required_material = None
+    
+    for scroll_attempt in range(10):  # Try scrolling right up to 10 times
+        if stop_flag and stop_flag.is_set():
+            return False
+        
+        # 6-7. Capture screen and find research icons
+        capture_screen(device_serial=device_serial)
+        found_this_page = False
+        tapped_positions = set()  # Reset tapped positions for each new page
+        for research_icon in research_icons:
+            if stop_flag and stop_flag.is_set():
+                return False
+            pos = find_image_on_screen(research_icon)
+            if pos:
+                # Skip if this position was already tapped in this loop
+                if pos in tapped_positions:
+                    print(f"[DEBUG] Skipping already tapped research icon at {pos}")
+                    continue
+                tapped_positions.add(pos)
+                print(f"🔍 Found research icon: {os.path.basename(research_icon)} at {pos}")
+                # 9. Click on the research image
+                wait_and_tap(research_icon, device_serial=device_serial)
+                time.sleep(0.5)
+                # 10. Check if we really clicked by looking for research_found_icon
+                if not wait_for_image("research_found_icon.png", device_serial, timeout=3, stop_flag=stop_flag):
+                    print("❌ research_found_icon did not appear after clicking research")
+                    continue
+                print("✅ Successfully clicked on research, research_found_icon appeared")
+                found_this_page = True
+                # 11. Click on research_button and handle conditions
+                capture_screen(device_serial=device_serial)
+                research_btn_found = find_image_on_screen("research_button.png")
+                if not research_btn_found:
+                    print("📊 Research is still in progress (no research_button)")
+                    for close_attempt in range(10):
+                        if stop_flag and stop_flag.is_set():
+                            return False
+                        if not find_image_on_screen("research_found_icon.png"):
+                            print("✅ Successfully closed research popup")
+                            break
+                        if find_image_on_screen("quest_close_button.png"):
+                            wait_and_tap("quest_close_button.png", device_serial=device_serial)
+                            time.sleep(0.3)
+                        else:
+                            time.sleep(0.3)
+                    continue
+                else:
+                    print("🔬 Found research_button, checking availability...")
+                    for click_attempt in range(10):
+                        if stop_flag and stop_flag.is_set():
+                            return False
+                        wait_and_tap("research_button.png", device_serial=device_serial)
+                        time.sleep(0.3)
+                        capture_screen(device_serial=device_serial)
+                        not_enough = find_image_on_screen("not_enough_mats.png")
+                        research_btn_still_there = find_image_on_screen("research_button.png")
+                        if not_enough:
+                            print("❌ Not enough materials for research")
+                            required_material = find_required_material(device_serial, stop_flag)
+                            print(f"[DEBUG] required_material after detection: {required_material}")
+                            if required_material is None:
+                                print("[DEBUG] No required material found, closing popups and continuing to next research slot.")
+                                for close_attempt in range(10):
+                                    if stop_flag and stop_flag.is_set():
+                                        return False
+                                    capture_screen(device_serial=device_serial)
+                                    if not find_image_on_screen("not_enough_mats.png"):
+                                        print("✅ Successfully closed not_enough_mats popup")
+                                        break
+                                    close_positions = find_all_images_on_screen("quest_close_button.png")
+                                    if close_positions:
+                                        print(f"[DEBUG] Attempting to close not_enough_mats popup, attempt {close_attempt+1}, found {len(close_positions)} close buttons.")
+                                        for idx, pos in enumerate(close_positions):
+                                            print(f"[DEBUG] Tapping quest_close_button at {pos} (index {idx})")
+                                            from utils import adb_tap
+                                            adb_tap(*pos, device_serial=device_serial)
+                                            time.sleep(0.5)
+                                    else:
+                                        print(f"[DEBUG] quest_close_button not found on attempt {close_attempt+1}")
+                                        time.sleep(0.3)
+                                print("[DEBUG] Finished not_enough_mats popup closing loop.")
+                                tapped_positions.add(pos)
+                                continue
+                            found_research = True
+                            for close_attempt in range(10):
+                                if stop_flag and stop_flag.is_set():
+                                    print("[DEBUG] Stop flag set during not_enough_mats popup closing loop.")
+                                    return False
+                                capture_screen(device_serial=device_serial)
+                                if not find_image_on_screen("not_enough_mats.png"):
+                                    print("✅ Successfully closed not_enough_mats popup")
+                                    break
+                                close_positions = find_all_images_on_screen("quest_close_button.png")
+                                if close_positions:
+                                    print(f"[DEBUG] Attempting to close not_enough_mats popup, attempt {close_attempt+1}, found {len(close_positions)} close buttons.")
+                                    for idx, pos in enumerate(close_positions):
+                                        print(f"[DEBUG] Tapping quest_close_button at {pos} (index {idx})")
+                                        from utils import adb_tap
+                                        adb_tap(*pos, device_serial=device_serial)
+                                        time.sleep(0.2)
+                                else:
+                                    print(f"[DEBUG] quest_close_button not found on attempt {close_attempt+1}")
+                                    time.sleep(0.3)
+                            print("[DEBUG] Finished not_enough_mats popup closing loop.")
+                            break
+                        elif not research_btn_still_there:
+                            print("✅ Research started successfully")
+                            # The game auto-closes the popup, so just wait and refresh
+                            time.sleep(1)
+                            capture_screen(device_serial=device_serial)
+                            continue
+                for close_attempt in range(10):
+                    if stop_flag and stop_flag.is_set():
+                        return False
+                    if not find_image_on_screen("research_found_icon.png"):
+                        print("✅ Successfully closed research popup")
+                        break
+                    if find_image_on_screen("quest_close_button.png"):
+                        wait_and_tap("quest_close_button.png", device_serial=device_serial)
+                        time.sleep(0.3)
+                    else:
+                        time.sleep(0.3)
+        
+        if found_research:
+            break
+        
+        # 8. If nothing found, scroll to the right
+        print("8. No research found on this page, scrolling right...")
+        adb_swipe(800, 400, 200, 400, duration_ms=800, device_serial=device_serial)
+        time.sleep(1)
+    
+    if not found_research:
+        print("❌ No available research found after scrolling through all pages")
+        # Close popup and return to management
+        close_popup_until_management(device_serial, stop_flag)
+        return False
+    
+    # Close popup until management_button appears
+    if not close_popup_until_management(device_serial, stop_flag):
+        return False
+    
+    # If we need materials, produce them
+    if required_material:
+        # Map required material to production material icon
+        required_material_name = os.path.basename(required_material)
+        if required_material_name.startswith("required_"):
+            production_material_name = required_material_name.replace("required_", "")
+        else:
+            production_material_name = required_material_name
+        production_material_path = os.path.join(MATERIAL_ICON_DIR, production_material_name)
+        print(f"🛠️ Need to produce material: {production_material_name}")
+        print(f"[DEBUG] About to click management_button to go to management screen.")
+        # Click management_button to go to management screen
+        if not tap_with_fail_check("management_button.png", device_serial, stop_flag):
+            print("❌ Failed to click management_button")
+            return False
+        print(f"[DEBUG] management_button clicked, waiting for production_management button.")
+        # Wait and check if production_management button appears (to confirm we're on management page)
+        if not wait_for_image("production_management.png", device_serial, stop_flag=stop_flag):
+            print("❌ production_management button did not appear after clicking management_button")
+            return False
+        print(f"[DEBUG] production_management button appeared, about to click it.")
+        # Click production_management button
+        if not tap_with_fail_check("production_management.png", device_serial, stop_flag):
+            print("❌ Failed to click production_management button")
+            return False
+        print(f"[DEBUG] production_management button clicked, about to produce material.")
+        # Produce the required material (use mapped production_material_path)
+        if not scroll_and_find_and_produce(production_material_path, device_serial, stop_flag=stop_flag):
+            print("❌ Failed to produce required material")
+            return False
+        print(f"[DEBUG] Finished producing material, proceeding to refill all.")
+        # Click refill_all_button
+        print("[DEBUG] Clicking refill_all_button...")
+        if not tap_with_fail_check("refill_all_button.png", device_serial, stop_flag):
+            print("❌ Failed to click refill_all_button")
+            return False
+        # Wait for refill_all_confirm_button to appear
+        print("[DEBUG] Waiting for refill_all_confirm_button to appear...")
+        if not wait_for_image("refill_all_confirm_button.png", device_serial, stop_flag=stop_flag):
+            print("❌ refill_all_confirm_button did not appear after clicking refill_all_button")
+            return False
+        # Click refill_all_confirm_button until it disappears
+        print("[DEBUG] Clicking refill_all_confirm_button until it disappears...")
+        for attempt in range(10):
+            if stop_flag and stop_flag.is_set():
+                return False
+            capture_screen(device_serial=device_serial)
+            if not find_image_on_screen("refill_all_confirm_button.png"):
+                print("[DEBUG] refill_all_confirm_button disappeared.")
+                break
+            tap_with_fail_check("refill_all_confirm_button.png", device_serial, stop_flag)
+            time.sleep(0.3)
+        # Close quest popups until activity_button is found
+        print("[DEBUG] Closing quest popups until activity_button is found...")
+        for attempt in range(15):
+            if stop_flag and stop_flag.is_set():
+                return False
+            capture_screen(device_serial=device_serial)
+            if find_image_on_screen("activity_button.png"):
+                print("[DEBUG] Found activity_button, ready to restart research loop.")
+                break
+            close_positions = find_all_images_on_screen("quest_close_button.png")
+            if close_positions:
+                for pos in close_positions:
+                    from utils import adb_tap
+                    adb_tap(*pos, device_serial=device_serial)
+                    time.sleep(0.2)
+            else:
+                time.sleep(0.3)
+        # Restart the research loop
+        print("[DEBUG] Restarting auto_research_material loop...")
+        
+        return auto_research_material(stop_flag, device_serial, research_type)
+    
+    print("✅ Research material automation completed successfully!")
+    return True
+
+def run_auto_research_material(stop_flag, device_serial=None):
+    """Wrapper function to run auto research material"""
+    if stop_flag and stop_flag.is_set():
+        return
+    return auto_research_material(stop_flag, device_serial, "castle") 

@@ -4,10 +4,14 @@ import threading
 import os
 import sys
 import subprocess
-from dungeon_bot import run_dungeon_loop
 from event_auto_runner import run_event_loop
 from simple_dungeon_bot import run_dungeon_loop_simple
-from config import get_adb_path, get_resource_path
+from config import get_adb_path, get_resource_path, selected_device_serial
+import config
+from simple_material_production import run_material_production_loop
+from auto_research_material import auto_research_material
+
+CURRENT_VERSION = "v1.0.5"
 
 # === Global Control Flags ===
 event_thread = None
@@ -18,6 +22,9 @@ dungeon_stop_flag = threading.Event()
 
 garden_thread = None
 garden_stop_flag = threading.Event()
+
+# === Global Device Selection ===
+device_dropdown = None
 
 # --- Load Google Font (Itim) on Windows ---
 if sys.platform == "win32":
@@ -70,6 +77,23 @@ except Exception as e:
     print(f"Could not load icon: {e}")
 
 # === ADB Setup Functions ===
+def get_available_devices():
+    """Get list of available ADB devices"""
+    try:
+        result = subprocess.run([get_adb_path(), 'devices'], 
+                               capture_output=True, text=True, 
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+        lines = result.stdout.strip().split('\n')
+        devices = []
+        for line in lines:
+            if '\tdevice' in line:
+                device_serial = line.split('\t')[0]
+                devices.append(device_serial)
+        return devices
+    except Exception as e:
+        print(f"Error getting devices: {e}")
+        return []
+
 def check_adb_connection():
     """Check if ADB is working and device is connected"""
     try:
@@ -94,12 +118,25 @@ def test_connection_quick():
     else:
         print("❌ ไม่พบ emulator กรุณาเปิดใช้งาน ADB debugging ก่อน")
 
+def check_device_selected():
+    """Check if a device is selected before starting bot functions"""
+    if not config.selected_device_serial:
+        print("❌ ไม่ได้เลือกอุปกรณ์! กรุณาเลือกอุปกรณ์ก่อนเริ่มใช้งาน bot")
+        return False
+    print(f"✅ ใช้อุปกรณ์: {config.selected_device_serial}")
+    return True
+
 def check_adb_before_start():
     """Check ADB connection before starting any bot function"""
     is_connected, devices = check_adb_connection()
     if not is_connected:
         print("❌ ไม่ได้เชื่อมต่อ ADB! กรุณาเปิดใช้งาน ADB debugging ก่อน")
         return False
+    
+    # Also check if a device is selected
+    if not check_device_selected():
+        return False
+        
     return True
 
 def show_setup_wizard():
@@ -307,12 +344,197 @@ def show_setup_wizard():
 resolution_frame = ctk.CTkFrame(root)
 resolution_frame.pack(fill="x", pady=(5, 0))
 
+# Add Check for Update button (left) and resolution label (right)
+def download_with_progress(url, filename):
+    import requests
+    import customtkinter as ctk
+    progress_win = ctk.CTkToplevel(root)
+    progress_win.title("Downloading Update")
+    progress_win.geometry("400x120")
+    progress_win.resizable(False, False)
+    progress_label = ctk.CTkLabel(progress_win, text="Downloading update...", font=(FONT_FAMILY, 13))
+    progress_label.pack(pady=(20, 10))
+    progress_bar = ctk.CTkProgressBar(progress_win, width=350)
+    progress_bar.pack(pady=(0, 20))
+    progress_bar.set(0)
+    progress_win.grab_set()
+    progress_win.focus_force()
+    progress_win.lift()
+    with requests.get(url, stream=True) as resp:
+        resp.raise_for_status()
+        total = int(resp.headers.get('content-length', 0))
+        downloaded = 0
+        chunk_size = 8192
+        with open(filename, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        progress = downloaded / total
+                        progress_bar.set(progress)
+                        progress_win.update()
+    progress_win.destroy()
+
+def check_for_update():
+    import threading
+    import requests
+    import webbrowser
+    import os
+    import sys
+    from tkinter import messagebox
+    def do_check():
+        GITHUB_API = 'https://api.github.com/repos/jmorajame/cookie-run-kingdom-helper/releases/latest'
+        try:
+            r = requests.get(GITHUB_API, timeout=10)
+            data = r.json()
+            latest_version = data.get('tag_name', None)
+            if not latest_version:
+                messagebox.showinfo("Update Check", "Could not check for updates.")
+                return
+            if latest_version != CURRENT_VERSION:
+                # Find the versioned .exe asset
+                import re
+                exe_url = None
+                exe_name = None
+                for asset in data.get('assets', []):
+                    if re.match(r'kaidum_cat_v[\d\.-_]+\.exe', asset['name']):
+                        exe_url = asset['browser_download_url']
+                        exe_name = asset['name']
+                        break
+                if exe_url and exe_name:
+                    if messagebox.askyesno("Update Available", f"New version {latest_version} is available!\nDo you want to download it now?"):
+                        try:
+                            # Download new exe as its versioned name with progress bar
+                            download_with_progress(exe_url, exe_name)
+                            download_path = os.path.abspath(exe_name)
+                            messagebox.showinfo(
+                                "Download Complete", 
+                                f"Update downloaded successfully to:\n{download_path}\n\nPlease close this application and run the new version."
+                            )
+                        except Exception as e:
+                            messagebox.showerror("Download Error", f"Failed to download the update:\n{e}")
+                else:
+                    if messagebox.askyesno("Update Available", f"New version {latest_version} is available!\nOpen download page?"):
+                        webbrowser.open('https://github.com/jmorajame/cookie-run-kingdom-helper/releases/latest')
+            else:
+                messagebox.showinfo("No Update", "You are running the latest version.")
+        except Exception as e:
+            messagebox.showerror("Update Check", f"Error checking for update:\n{e}")
+    threading.Thread(target=do_check, daemon=True).start()
+
+resolution_frame.grid_columnconfigure(0, weight=1)
+resolution_frame.grid_columnconfigure(1, weight=1)
+
+check_update_btn = ctk.CTkButton(resolution_frame, text="Check for Update", command=check_for_update, font=(FONT_FAMILY, 11), height=28, width=140)
+check_update_btn.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=5)
+
 resolution_label = ctk.CTkLabel(resolution_frame, text="📱 ต้องการความละเอียดหน้าจอ: 960x540 (160 DPI)", 
                                font=(FONT_FAMILY, 11), text_color="#666666")
-resolution_label.pack(pady=5)
+resolution_label.grid(row=0, column=1, sticky="e", padx=(0, 10), pady=5)
+
+def get_device_label_text():
+    if config.selected_device_serial:
+        return f"📱 {config.selected_device_serial}"
+    else:
+        return "📱 No device selected"
+
+def update_device_status_label():
+    # Remove this function since we no longer have the device status label
+    # device_status_var.set(get_device_label_text())
+    pass
+
+def on_device_selection_change(choice):
+    """Handle device selection change"""
+    if choice == "No devices found" or choice == "Loading devices...":
+        return
+        
+    old_device = config.selected_device_serial
+    config.selected_device_serial = choice
+    print(f"Selected device: {config.selected_device_serial}")
+    
+    # Stop all running functions when device changes
+    if old_device != choice:
+        print("🔄 เปลี่ยนอุปกรณ์ → หยุดฟังก์ชันทั้งหมด")
+        stop_all_other_functions('device_change')
+        
+        # Deselect all switches
+        if dungeon_switch.get():
+            dungeon_switch.deselect()
+            dungeon_stop_flag.set()
+            print("🛑 หยุด Auto explore stage")
+            
+        if event_switch.get():
+            event_switch.deselect()
+            event_stop_flag.set()
+            print("🛑 หยุด Auto battle Giant POLY-ROLY")
+            
+        if garden_switch.get():
+            garden_switch.deselect()
+            garden_stop_flag.set()
+            print("🛑 หยุด Auto Garden Event")
+        
+        clear_log()
+        print(f"✅ เปลี่ยนไปใช้อุปกรณ์: {choice}")
+
+# Replace button with dropdown in resolution_frame
+device_dropdown = ctk.CTkOptionMenu(
+    resolution_frame, 
+    values=["Loading devices..."], 
+    command=on_device_selection_change,
+    font=(FONT_FAMILY, 11), 
+    height=28, 
+    width=140
+)
+device_dropdown.grid(row=1, column=1, sticky="e", padx=(0, 10), pady=5)
+
+def refresh_device_dropdown():
+    """Refresh the device dropdown with available devices"""
+    devices = get_available_devices()
+    print(f"Found devices: {devices}")
+    
+    if devices and device_dropdown:
+        device_dropdown.configure(values=devices)
+        # Only auto-select if no device is currently selected or if current device not in list
+        if config.selected_device_serial is None:
+            # No device selected, select first available
+            config.selected_device_serial = devices[0]
+            device_dropdown.set(devices[0])
+            print(f"Selected first available device: {devices[0]}")
+        elif config.selected_device_serial not in devices:
+            # Current device not available, select first device
+            old_device = config.selected_device_serial
+            config.selected_device_serial = devices[0]
+            device_dropdown.set(devices[0])
+            print(f"Selected first available device: {devices[0]}")
+            # Trigger device change logic
+            if old_device != devices[0]:
+                on_device_selection_change(devices[0])
+        else:
+            # Current device is still available, keep it selected
+            device_dropdown.set(config.selected_device_serial)
+            print(f"Kept current device: {config.selected_device_serial}")
+    elif device_dropdown:
+        device_dropdown.configure(values=["No devices found"])
+        device_dropdown.set("No devices found")
+        config.selected_device_serial = None
+        print("No devices found")
+
+# Initialize device dropdown
+refresh_device_dropdown()
+
+# Add CTkTabview for main content
+main_tabview = ctk.CTkTabview(root, height=320)
+main_tabview.pack(fill="x", padx=0, pady=(0, 0))
+main_tabview.add("Auto battle")
+main_tabview.add("Materials")
+main_tabview._segmented_button.configure(font=(FONT_FAMILY, 14))  # Apply font to tab labels
+
+# Use the 'Auto battle' tab as the parent for all auto function rows
+auto_tab = main_tabview.tab("Auto battle")
 
 # --- Dungeon Row ---
-dungeon_row = ctk.CTkFrame(root)
+dungeon_row = ctk.CTkFrame(auto_tab)
 dungeon_row.pack(fill="x", pady=(5, 0))
 dungeon_row.grid_columnconfigure(0, weight=1)
 dungeon_name = ctk.CTkLabel(dungeon_row, text=BUTTON_TEXTS['dungeon'][0], anchor="w", font=(FONT_FAMILY, 14))
@@ -340,7 +562,7 @@ dungeon_desc = ctk.CTkLabel(dungeon_row, text="เข้าด่านถึง
 dungeon_desc.grid(row=1, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
 
 # --- Event Row ---
-event_row = ctk.CTkFrame(root)
+event_row = ctk.CTkFrame(auto_tab)
 event_row.pack(fill="x", pady=(5, 0))
 event_row.grid_columnconfigure(0, weight=1)
 event_name = ctk.CTkLabel(event_row, text=BUTTON_TEXTS['event'][0], anchor="w", font=(FONT_FAMILY, 14))
@@ -368,7 +590,7 @@ event_desc = ctk.CTkLabel(event_row, text="เข้า Event ไปถึงห
 event_desc.grid(row=1, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
 
 # --- Garden Row ---
-garden_row = ctk.CTkFrame(root)
+garden_row = ctk.CTkFrame(auto_tab)
 garden_row.pack(fill="x", pady=(5, 0))
 garden_row.grid_columnconfigure(0, weight=1)
 garden_name = ctk.CTkLabel(garden_row, text=BUTTON_TEXTS['garden'][0], anchor="w", font=(FONT_FAMILY, 14))
@@ -376,7 +598,7 @@ garden_name.grid(row=0, column=0, sticky="w", padx=(20, 5), pady=2)
 
 def endless_garden_loop(stop_flag):
     from garden_event_runner import run_garden_event_loop
-    run_garden_event_loop(stop_flag, skip_level8_check=True)
+    run_garden_event_loop(stop_flag, skip_level8_check=True, device_serial=config.selected_device_serial)
 
 def garden_switch_event():
     if garden_switch.get():
@@ -417,6 +639,67 @@ garden_segmented.grid(row=2, column=0, columnspan=2, sticky="w", padx=(20, 5), p
 garden_desc = ctk.CTkLabel(garden_row, text="เข้า Event Garden แล้วจะเลื่อนผสมวัตถุให้", font=(FONT_FAMILY, 12), text_color="#888888")
 garden_desc.grid(row=1, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
 
+# In the Materials tab, add a simple material production row
+materials_tab = main_tabview.tab("Materials")
+
+material_row = ctk.CTkFrame(materials_tab)
+material_row.pack(fill="x", pady=(5, 0))
+material_row.grid_columnconfigure(0, weight=1)
+material_name = ctk.CTkLabel(material_row, text="Simple material production", anchor="w", font=(FONT_FAMILY, 14))
+material_name.grid(row=0, column=0, sticky="w", padx=(20, 5), pady=2)
+
+material_stop_flag = threading.Event()
+material_thread = None
+
+def material_switch_event():
+    global material_thread
+    if material_switch.get():
+        material_stop_flag.clear()
+        material_thread = threading.Thread(target=run_material_production_loop, args=(material_stop_flag, config.selected_device_serial), daemon=True)
+        material_thread.start()
+    else:
+        material_stop_flag.set()
+        print("🛑 หยุด Simple material production")
+
+material_switch = ctk.CTkSwitch(material_row, text="", command=material_switch_event, font=(FONT_FAMILY, 12))
+material_switch.grid(row=0, column=1, sticky="e", padx=(5, 0), pady=2)
+material_desc = ctk.CTkLabel(material_row, text="วนคลิกปุ่มจัดการ เติมทั้งหมด และยืนยัน จนกว่าจะหยุด", font=(FONT_FAMILY, 12), text_color="#888888")
+material_desc.grid(row=1, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
+
+# --- Auto Research Material Row ---
+research_row = ctk.CTkFrame(materials_tab)
+research_row.pack(fill="x", pady=(5, 0))
+research_row.grid_columnconfigure(0, weight=1)
+research_name = ctk.CTkLabel(research_row, text="Auto research (pickaxe)", anchor="w", font=(FONT_FAMILY, 14))
+research_name.grid(row=0, column=0, sticky="w", padx=(20, 5), pady=2)
+
+research_stop_flag = threading.Event()
+research_thread = None
+
+def research_switch_event():
+    global research_thread
+    if research_switch.get():
+        research_stop_flag.clear()
+        research_thread = threading.Thread(
+            target=auto_research_material,
+            args=(research_stop_flag, config.selected_device_serial),
+            daemon=True
+        )
+        research_thread.start()
+    else:
+        research_stop_flag.set()
+        print("🛑 หยุด Auto research (pickaxe)")
+
+research_switch = ctk.CTkSwitch(research_row, text="", command=research_switch_event, font=(FONT_FAMILY, 12))
+research_switch.grid(row=0, column=1, sticky="e", padx=(5, 0), pady=2)
+research_desc = ctk.CTkLabel(
+    research_row,
+    text="วนเช็คและผลิต pickaxe สำหรับวิจัยอัตโนมัติ",
+    font=(FONT_FAMILY, 12),
+    text_color="#888888"
+)
+research_desc.grid(row=1, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
+
 # === Log Section ===
 log_frame = ctk.CTkFrame(root)
 log_frame.pack(fill="both", expand=True, pady=(5, 0))
@@ -434,7 +717,7 @@ setup_btn = ctk.CTkButton(footer_frame, text="🎮 ตัวช่วยตั�
 setup_btn.pack(side="left", padx=(20, 0), pady=5)
 
 # Author text on the right
-footer_label = ctk.CTkLabel(footer_frame, text="Kaidum Kaidaow เป็นพี่น้องกัน", font=(FONT_FAMILY, 12), text_color="#888888", anchor="e")
+footer_label = ctk.CTkLabel(footer_frame, text=f"Kaidum Kaidaow เป็นพี่น้องกัน  |  {CURRENT_VERSION}", font=(FONT_FAMILY, 12), text_color="#888888", anchor="e")
 footer_label.pack(side="right", padx=(0, 20), pady=5)
 
 # === Log Management ===
@@ -468,10 +751,10 @@ sys.stdout = sys.stderr = Redirect()
 
 def wrapped_garden_loop():
     from garden_event_runner import run_garden_event_loop
-    run_garden_event_loop(garden_stop_flag, skip_level8_check=False)
+    run_garden_event_loop(garden_stop_flag, skip_level8_check=False, device_serial=config.selected_device_serial)
 
 def wrapped_event_loop():
-    run_event_loop(event_stop_flag)
+    run_event_loop(event_stop_flag, device_serial=config.selected_device_serial)
 
 def wrapped_dungeon_loop():
     run_dungeon_loop_simple(dungeon_stop_flag)

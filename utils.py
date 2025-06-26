@@ -9,20 +9,74 @@ ADB_PATH = get_adb_path()
 warnings.filterwarnings('ignore', category=UserWarning)
 os.environ['OPENCV_IO_MAX_IMAGE_PIXELS'] = str(pow(2, 40))
 
-def adb_tap(x, y):
+def adb_tap(x, y, device_serial=None):
     """Tap on the screen at (x, y) using adb."""
-    subprocess.run([ADB_PATH, 'shell', 'input', 'tap', str(x), str(y)], creationflags=subprocess.CREATE_NO_WINDOW)
+    cmd = [ADB_PATH]
+    if device_serial:
+        cmd += ['-s', device_serial]
+    cmd += ['shell', 'input', 'tap', str(x), str(y)]
+    subprocess.run(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
 
-def capture_screen():
+def adb_swipe(x1, y1, x2, y2, duration_ms=300, device_serial=None):
+    """Swipe on the screen from (x1, y1) to (x2, y2) in `duration_ms`."""
+    cmd = [ADB_PATH]
+    if device_serial:
+        cmd += ['-s', device_serial]
+    cmd += ['shell', 'input', 'swipe', str(x1), str(y1), str(x2), str(y2), str(duration_ms)]
+    subprocess.run(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
+
+def adb_drag(start_x, start_y, end_x, end_y, duration_ms=1500, device_serial=None):
+    """
+    Perform a precise drag from a start point to an end point with no momentum.
+    """
+    print(f"Dragging from ({start_x}, {start_y}) to ({end_x}, {end_y})...")
+    adb_swipe(start_x, start_y, end_x, end_y, duration_ms, device_serial=device_serial)
+
+def adb_scroll(direction='down', duration_ms=1200, device_serial=None):
+    """
+    Perform a scroll gesture in the specified direction.
+    Assumes a 960x540 resolution.
+    A long duration (~1200ms) results in a precise "drag" that completely eliminates momentum.
+    """
+    # X-coordinate is the horizontal center of the screen
+    x = 480 
+    
+    # Y-coordinates for the swipe, avoiding the very top/bottom of the screen
+    start_y = 400 # ~75% of the way down
+    end_y   = 140 # ~25% of the way down
+
+    if direction == 'down':
+        # To scroll down, we swipe from bottom to top
+        print("Scrolling down...")
+        adb_swipe(x, start_y, x, end_y, duration_ms, device_serial=device_serial)
+    elif direction == 'up':
+        # To scroll up, we swipe from top to bottom
+        print("Scrolling up...")
+        adb_swipe(x, end_y, x, start_y, duration_ms, device_serial=device_serial)
+
+def capture_screen(device_serial=None):
     """Capture the current screen from the device."""
     try:
-        subprocess.run([ADB_PATH, 'shell', 'screencap', '-p', '/sdcard/screen.png'], creationflags=subprocess.CREATE_NO_WINDOW, timeout=10)
-        subprocess.run([ADB_PATH, 'pull', '/sdcard/screen.png', './screen.png'], creationflags=subprocess.CREATE_NO_WINDOW, timeout=10)
+        cmd1 = [ADB_PATH]
+        if device_serial:
+            cmd1 += ['-s', device_serial]
+        cmd1 += ['shell', 'screencap', '-p', '/sdcard/screen.png']
+        subprocess.run(cmd1, creationflags=subprocess.CREATE_NO_WINDOW, timeout=10)
+        cmd2 = [ADB_PATH]
+        if device_serial:
+            cmd2 += ['-s', device_serial]
+        cmd2 += ['pull', '/sdcard/screen.png', './screen.png']
+        subprocess.run(cmd2, creationflags=subprocess.CREATE_NO_WINDOW, timeout=10)
     except Exception:
         print("Screenshot capture error")
 
 def find_image_on_screen(template_path, threshold=0.85):
     """Find the template image on the current screen. Return (x, y) if found, else None."""
+    # Only prepend 'button-images/' if template_path does not contain a folder
+    if '/' not in template_path and '\\' not in template_path:
+        search_path = f"button-images/{template_path}"
+    else:
+        search_path = template_path
     try:
         if not os.path.exists('screen.png'):
             return None
@@ -31,7 +85,7 @@ def find_image_on_screen(template_path, threshold=0.85):
             screen = cv2.imread('screen.png', cv2.IMREAD_COLOR)
         if screen is None:
             return None
-        full_template_path = get_resource_path(template_path)
+        full_template_path = get_resource_path(search_path)
         template = cv2.imread(full_template_path, cv2.IMREAD_COLOR)
         if template is None:
             return None
@@ -44,70 +98,71 @@ def find_image_on_screen(template_path, threshold=0.85):
     except Exception:
         return None
 
-def wait_and_tap(template_name, delay=1.0, max_checks=10, sleep_interval=0.5):
+def wait_and_tap(template_name, delay=1.0, max_checks=10, sleep_interval=0.5, device_serial=None):
     """Wait, capture, tap the button if found, and confirm it disappears."""
     time.sleep(delay)
-    capture_screen()
-    pos = find_image_on_screen(f"button-images/{template_name}")
+    capture_screen(device_serial=device_serial)
+    # Only prepend 'button-images/' if template_name does not contain a folder
+    if '/' not in template_name and '\\' not in template_name:
+        search_path = f"button-images/{template_name}"
+    else:
+        search_path = template_name
+    pos = find_image_on_screen(search_path)
     if pos:
-        adb_tap(*pos)
+        adb_tap(*pos, device_serial=device_serial)
         # Wait for button to disappear
         for _ in range(max_checks):
             time.sleep(sleep_interval)
-            capture_screen()
-            if not find_image_on_screen(f"button-images/{template_name}"):
+            capture_screen(device_serial=device_serial)
+            if not find_image_on_screen(search_path):
                 return True
         return False  # Button did not disappear in time
     return False
 
-def confirm_tap_until_button_disappears(template_name, retries=20, delay=1.0):
+def confirm_tap_until_button_disappears(template_name, retries=20, delay=1.0, device_serial=None):
     """Tap the button until it disappears or retries run out, with robust waiting for slow emulators."""
-    print(f"[DEBUG] Trying to tap '{template_name}' until it disappears (max {retries} retries)...")
+    # Only prepend 'button-images/' if template_name does not contain a folder
+    if '/' not in template_name and '\\' not in template_name:
+        search_path = f"button-images/{template_name}"
+    else:
+        search_path = template_name
     not_found_count = 0
-    for attempt in range(1, retries + 1):
-        capture_screen()
-        pos = find_image_on_screen(f"button-images/{template_name}")
+    for _ in range(1, retries + 1):
+        capture_screen(device_serial=device_serial)
+        pos = find_image_on_screen(search_path)
         if pos:
-            print(f"[DEBUG] Attempt {attempt}: Found '{template_name}' at {pos}, tapping...")
-            adb_tap(*pos)
+            adb_tap(*pos, device_serial=device_serial)
             # Wait for button to disappear after tap
             for wait_idx in range(10):
                 time.sleep(delay)
-                capture_screen()
-                if not find_image_on_screen(f"button-images/{template_name}"):
-                    print(f"[DEBUG] '{template_name}' disappeared after tap (wait {wait_idx+1})")
+                capture_screen(device_serial=device_serial)
+                if not find_image_on_screen(search_path):
                     return True
-                else:
-                    print(f"[DEBUG] '{template_name}' still present after tap (wait {wait_idx+1})")
         else:
             not_found_count += 1
-            print(f"[DEBUG] Attempt {attempt}: '{template_name}' not found (not_found_count={not_found_count})")
             if not_found_count >= 3:
                 # Force a screen refresh tap in case the emulator is lagging
-                print("[DEBUG] Forcing screen refresh with a generic tap (480, 300)")
-                adb_tap(480, 300)
+                adb_tap(480, 300, device_serial=device_serial)
                 not_found_count = 0
             else:
                 # If not found, assume it's gone
-                print(f"[DEBUG] '{template_name}' assumed gone after {attempt} attempts.")
                 return True
     # Fallback: try a generic tap if button still present after all retries
-    print(f"[WARNING] '{template_name}' still present after {retries} retries. Trying fallback tap at (480, 300)...")
-    adb_tap(480, 300)
+    adb_tap(480, 300, device_serial=device_serial)
     time.sleep(2)
-    capture_screen()
-    if not find_image_on_screen(f"button-images/{template_name}"):
-        print(f"[DEBUG] '{template_name}' disappeared after fallback tap.")
+    capture_screen(device_serial=device_serial)
+    if not find_image_on_screen(search_path):
         return True
-    print(f"[ERROR] '{template_name}' still present after all attempts and fallback. Giving up.")
     return False
 
-def clean_post_exit_popups():
-    """Clean up post-exit popups by tapping known buttons, robust for slow emulators."""
-    print("กำลังกดปิด popups...")
+def clean_post_exit_popups(stop_flag=None, device_serial=None):
+    """Clean up post-exit popups by tapping known buttons, robust for slow emulators. Respects stop_flag if provided."""
+    print("\u0e01\u0e33\u0e25\u0e31\u0e07\u0e01\u0e14\u0e1b\u0e34\u0e14 popups...")
     attempts_without_finds = 0
     while attempts_without_finds < 5:
-        capture_screen()
+        if stop_flag is not None and stop_flag.is_set():
+            break
+        capture_screen(device_serial=device_serial)
         found_any = False
         for btn in [
             "receive_reward_button.png",
@@ -115,15 +170,23 @@ def clean_post_exit_popups():
             "bundle_close_button.png",
             "level_up_continue_button.png",
             "skip_button.png",
+            "destroy_button.png",
         ]:
-            pos = find_image_on_screen(f"button-images/{btn}")
+            # Only prepend 'button-images/' if btn does not contain a folder
+            if '/' not in btn and '\\' not in btn:
+                search_path = f"button-images/{btn}"
+            else:
+                search_path = btn
+            pos = find_image_on_screen(search_path)
             if pos:
-                adb_tap(*pos)
+                adb_tap(*pos, device_serial=device_serial)
                 # Wait for button to disappear after tap
                 for _ in range(10):
+                    if stop_flag is not None and stop_flag.is_set():
+                        break
                     time.sleep(0.5)
-                    capture_screen()
-                    if not find_image_on_screen(f"button-images/{btn}"):
+                    capture_screen(device_serial=device_serial)
+                    if not find_image_on_screen(search_path):
                         break
                 found_any = True
         if not found_any:
@@ -131,6 +194,6 @@ def clean_post_exit_popups():
         else:
             attempts_without_finds = 0
         time.sleep(1)
-    print("ปิด popups ทั้งหมดเรียบร้อย")
-    adb_tap(480, 270)
+    print("\u0e1b\u0e34\u0e14 popups \u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14\u0e40\u0e23\u0e35\u0e22\u0e1a\u0e23\u0e49\u0e2d\u0e22")
+    adb_tap(480, 270, device_serial=device_serial)
 

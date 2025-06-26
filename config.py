@@ -2,6 +2,9 @@ import os
 import sys
 import platform
 
+# Global device selection
+selected_device_serial = None
+
 def get_base_path():
     """Get the base path for the application, works both in development and when bundled"""
     if getattr(sys, 'frozen', False):
@@ -62,19 +65,20 @@ def get_adb_path():
 
 # Get Tesseract path
 def get_tesseract_path():
-    # First check environment variable
-    tesseract_path = os.getenv('COOKIE_RUN_TESSERACT_PATH')
+    """Find the Tesseract executable."""
+    # Check environment variable first
+    tesseract_path = os.getenv('TESSERACT_CMD')
     if tesseract_path and os.path.exists(tesseract_path):
         return tesseract_path
-
-    # Default paths for different platforms
-    if platform.system() == 'Windows':
-        default_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-        if os.path.exists(default_path):
-            return default_path
-    else:
-        # On Unix-like systems, assume it's in PATH
+    
+    # Check default Windows installation path
+    if platform.system() == "Windows":
+        # It's common for the installer to add this to the PATH,
+        # so just returning 'tesseract' often works if the user selected that option.
         return 'tesseract'
+
+    # For other OS, assume it's in the PATH
+    return 'tesseract'
 
     raise FileNotFoundError(
         "Could not find Tesseract executable. Please either:\n"
