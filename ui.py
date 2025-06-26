@@ -11,7 +11,7 @@ import config
 from simple_material_production import run_material_production_loop
 from auto_research_material import auto_research_material
 
-CURRENT_VERSION = "v1.0.6"
+CURRENT_VERSION = "v1.0.7"
 
 # === Global Control Flags ===
 event_thread = None
@@ -376,7 +376,7 @@ def download_with_progress(url, filename):
                         progress_win.update()
     progress_win.destroy()
 
-def check_for_update():
+def check_for_update(show_messagebox=True):
     import threading
     import requests
     import webbrowser
@@ -390,9 +390,12 @@ def check_for_update():
             data = r.json()
             latest_version = data.get('tag_name', None)
             if not latest_version:
-                messagebox.showinfo("Update Check", "Could not check for updates.")
+                if show_messagebox:
+                    messagebox.showinfo("Update Check", "Could not check for updates.")
                 return
             if latest_version != CURRENT_VERSION:
+                # Update the label in the main thread
+                update_notice_label.configure(text=f"New update available: {latest_version}", text_color="red")
                 # Find the versioned .exe asset
                 import re
                 exe_url = None
@@ -418,9 +421,12 @@ def check_for_update():
                     if messagebox.askyesno("Update Available", f"New version {latest_version} is available!\nOpen download page?"):
                         webbrowser.open('https://github.com/jmorajame/cookie-run-kingdom-helper/releases/latest')
             else:
-                messagebox.showinfo("No Update", "You are running the latest version.")
+                update_notice_label.configure(text="")  # No update
+                if show_messagebox:
+                    messagebox.showinfo("No Update", "You are running the latest version.")
         except Exception as e:
-            messagebox.showerror("Update Check", f"Error checking for update:\n{e}")
+            if show_messagebox:
+                messagebox.showerror("Update Check", f"Error checking for update:\n{e}")
     threading.Thread(target=do_check, daemon=True).start()
 
 resolution_frame.grid_columnconfigure(0, weight=1)
@@ -432,6 +438,14 @@ check_update_btn.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=5)
 resolution_label = ctk.CTkLabel(resolution_frame, text="📱 ต้องการความละเอียดหน้าจอ: 960x540 (160 DPI)", 
                                font=(FONT_FAMILY, 11), text_color="#666666")
 resolution_label.grid(row=0, column=1, sticky="e", padx=(0, 10), pady=5)
+
+update_notice_label = ctk.CTkLabel(
+    resolution_frame,
+    text="",
+    font=(FONT_FAMILY, 12, "bold"),
+    text_color="red"
+)
+update_notice_label.grid(row=1, column=0, sticky="w", padx=(10, 0), pady=5)
 
 def get_device_label_text():
     if config.selected_device_serial:
@@ -758,5 +772,8 @@ def wrapped_event_loop():
 
 def wrapped_dungeon_loop():
     run_dungeon_loop_simple(dungeon_stop_flag)
+
+# Call check_for_update at the end of UI setup
+check_for_update(show_messagebox=False)
 
 root.mainloop()
