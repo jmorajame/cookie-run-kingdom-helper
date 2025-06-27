@@ -11,7 +11,7 @@ import config
 from simple_material_production import run_material_production_loop
 from auto_research_material import auto_research_material
 
-CURRENT_VERSION = "v1.0.7"
+CURRENT_VERSION = "v1.0.9"
 
 # === Global Control Flags ===
 event_thread = None
@@ -488,6 +488,16 @@ def on_device_selection_change(choice):
             garden_stop_flag.set()
             print("🛑 หยุด Auto Garden Event")
         
+        if material_switch.get():
+            material_switch.deselect()
+            material_stop_flag.set()
+            print("🛑 หยุด Simple material production")
+        
+        if research_switch.get():
+            research_switch.deselect()
+            research_stop_flag.set()
+            print("🛑 หยุด Auto research")
+        
         clear_log()
         print(f"✅ เปลี่ยนไปใช้อุปกรณ์: {choice}")
 
@@ -707,9 +717,10 @@ def research_switch_event():
         clear_log()
         research_stop_flag.clear()
         research_type = "cookie" if research_type_var.get() == "Cookie Research" else "castle"
+        max_level = int(research_level_var.get().replace("Level ", ""))
         research_thread = threading.Thread(
             target=auto_research_material,
-            args=(research_stop_flag, config.selected_device_serial, research_type),
+            args=(research_stop_flag, config.selected_device_serial, research_type, max_level),
             daemon=True
         )
         research_thread.start()
@@ -728,7 +739,27 @@ def on_research_type_change(value):
         stop_all_other_functions('research')
         clear_log()
         print("🛑 กำลังหยุด Auto research...")
+    else:
+        # Even if research is not running, stop all functions when type changes
+        stop_all_other_functions('type_change')
+        clear_log()
+        print("🛑 เปลี่ยนประเภทการวิจัย → หยุดฟังก์ชันทั้งหมด")
 
+def on_research_level_change(value):
+    if research_switch.get():
+        research_switch.deselect()
+        research_stop_flag.set()
+        # Stop all other functions and clear log
+        stop_all_other_functions('research')
+        clear_log()
+        print("🛑 กำลังหยุด Auto research...")
+    else:
+        # Even if research is not running, stop all functions when level changes
+        stop_all_other_functions('level_change')
+        clear_log()
+        # print("🛑 เปลี่ยนระดับการวิจัย → หยุดฟังก์ชันทั้งหมด")
+
+# Research type selector
 research_type_var = StringVar(value="Castle Research")
 research_type_segmented = ctk.CTkSegmentedButton(
     research_row, 
@@ -737,15 +768,44 @@ research_type_segmented = ctk.CTkSegmentedButton(
     command=on_research_type_change,
     font=(FONT_FAMILY, 12)
 )
-research_type_segmented.grid(row=2, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
+research_type_segmented.grid(row=1, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
+
+# Research level configuration - make it clear this is a setting
+research_config_frame = ctk.CTkFrame(research_row)
+research_config_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=(20, 5), pady=(0, 8))
+research_config_frame.grid_columnconfigure(0, weight=1)
+
+# Add a subtle background color to indicate this is a configuration section
+research_config_frame.configure(fg_color=("gray90", "gray20"))
+
+research_level_label = ctk.CTkLabel(
+    research_config_frame,
+    text="⚙️ Max Research Level:",
+    font=(FONT_FAMILY, 12),
+    text_color="#666666"
+)
+research_level_label.grid(row=0, column=0, sticky="w", padx=(10, 10), pady=5)
+
+research_level_var = StringVar(value="Level 5")
+# Note: Can easily extend to more levels by adding "Level 6", "Level 7", etc. to the values list
+research_level_dropdown = ctk.CTkOptionMenu(
+    research_config_frame,
+    values=["Level 1", "Level 2", "Level 3", "Level 4", "Level 5"],
+    variable=research_level_var,
+    command=on_research_level_change,
+    font=(FONT_FAMILY, 12),
+    width=120,
+    height=28
+)
+research_level_dropdown.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=5)
 
 research_desc = ctk.CTkLabel(
     research_row,
-    text="เช็ควิจัยอัตโนมัติและผลิตของสำหรับการวิจัย",
+    text="เช็ควิจัยอัตโนมัติและผลิตของสำหรับการวิจัย (จะผลิตวัสดุเฉพาะระดับที่เลือกและต่ำกว่า)",
     font=(FONT_FAMILY, 12),
     text_color="#888888"
 )
-research_desc.grid(row=1, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(0, 8))
+research_desc.grid(row=3, column=0, columnspan=2, sticky="w", padx=(20, 5), pady=(5, 8))
 
 # === Log Section ===
 log_frame = ctk.CTkFrame(root)

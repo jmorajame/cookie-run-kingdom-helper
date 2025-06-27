@@ -157,7 +157,7 @@ def confirm_tap_until_button_disappears(template_name, retries=20, delay=1.0, de
 
 def clean_post_exit_popups(stop_flag=None, device_serial=None):
     """Clean up post-exit popups by tapping known buttons, robust for slow emulators. Respects stop_flag if provided."""
-    print("\u0e01\u0e33\u0e25\u0e31\u0e07\u0e01\u0e14\u0e1b\u0e34\u0e14 popups...")
+    print("กำลังกดปิด popups...")
     attempts_without_finds = 0
     while attempts_without_finds < 5:
         if stop_flag is not None and stop_flag.is_set():
@@ -194,6 +194,6 @@ def clean_post_exit_popups(stop_flag=None, device_serial=None):
         else:
             attempts_without_finds = 0
         time.sleep(1)
-    print("\u0e1b\u0e34\u0e14 popups \u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14\u0e40\u0e23\u0e35\u0e22\u0e1a\u0e23\u0e49\u0e2d\u0e22")
+    print("ปิด popups ทั้งหมดเรียบร้อย")
     adb_tap(480, 270, device_serial=device_serial)
 

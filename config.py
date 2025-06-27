@@ -107,8 +107,11 @@ MATERIAL_ICON_NAMES = [
     "required_pickaxe.png",
     "required_saw.png",
     "required_shovel.png",
+    "required_axe.png",
+    "required_pretzel.png",
     "saw.png",
     "shovel.png",
+    "pretzel.png"
 ]
 
 COOKIE_RESEARCH_ICON_NAMES = [
@@ -148,6 +151,7 @@ BUTTON_IMAGES = [
     "next_stage_button.png",
     "next_stage_icon.png",
     "next_stage_logo.png",
+    "not_available_research_button.png",
     "not_available_to_research.png",
     "not_enough_mats.png",
     "prepare_button.png",
@@ -179,4 +183,34 @@ def get_material_icons():
 
 def get_cookie_research_icons():
     from config import get_resource_path
-    return [get_resource_path(os.path.join("cookie_research_icons", name)) for name in COOKIE_RESEARCH_ICON_NAMES] 
+    return [get_resource_path(os.path.join("cookie_research_icons", name)) for name in COOKIE_RESEARCH_ICON_NAMES]
+
+def get_material_icons_by_level(max_level):
+    """
+    Get material icons filtered by max level.
+    Level mapping:
+    lv1 = required_axe
+    lv2 = required_pickaxe  
+    lv3 = required_saw
+    lv4 = required_shovel
+    lv5 = required_pretzel
+    lv6-10 = (future materials, currently empty)
+    """
+    level_materials = {
+        1: ["required_axe.png"],
+        2: ["required_axe.png", "required_pickaxe.png"],
+        3: ["required_axe.png", "required_pickaxe.png", "required_saw.png"],
+        4: ["required_axe.png", "required_pickaxe.png", "required_saw.png", "required_shovel.png"],
+        5: ["required_axe.png", "required_pickaxe.png", "required_saw.png", "required_shovel.png", "required_pretzel.png"],
+        6: ["required_axe.png", "required_pickaxe.png", "required_saw.png", "required_shovel.png", "required_pretzel.png"],  # Future: add new material
+        7: ["required_axe.png", "required_pickaxe.png", "required_saw.png", "required_shovel.png", "required_pretzel.png"],  # Future: add new material
+        8: ["required_axe.png", "required_pickaxe.png", "required_saw.png", "required_shovel.png", "required_pretzel.png"],  # Future: add new material
+        9: ["required_axe.png", "required_pickaxe.png", "required_saw.png", "required_shovel.png", "required_pretzel.png"],  # Future: add new material
+        10: ["required_axe.png", "required_pickaxe.png", "required_saw.png", "required_shovel.png", "required_pretzel.png"],  # Future: add new material
+    }
+    
+    if max_level not in level_materials:
+        return []
+    
+    from config import get_resource_path
+    return [get_resource_path(os.path.join("material_icons", name)) for name in level_materials[max_level]] 
