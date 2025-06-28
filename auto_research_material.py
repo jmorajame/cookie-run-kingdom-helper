@@ -594,7 +594,7 @@ def auto_research_material(stop_flag, device_serial, research_type="castle", max
                 time.sleep(0.3)
         # Restart the research loop
         # print("[DEBUG] Restarting auto_research_material loop...")
-        clean_post_exit_popups(stop_flag, device_serial)
+        clean_post_exit_popups(stop_flag, device_serial, middle_tap=False)
         return auto_research_material(stop_flag, device_serial, research_type, max_level)
 
     if not required_material:
@@ -656,7 +656,7 @@ def auto_research_material(stop_flag, device_serial, research_type="castle", max
             else:
                 time.sleep(0.3)
         # Restart the research loop
-        clean_post_exit_popups(stop_flag, device_serial)
+        clean_post_exit_popups(stop_flag, device_serial, middle_tap=False)
         #print("[DEBUG] Restarting auto_research_material loop...")
         return auto_research_material(stop_flag, device_serial, research_type, max_level)
     

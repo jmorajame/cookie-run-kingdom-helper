@@ -155,8 +155,8 @@ def confirm_tap_until_button_disappears(template_name, retries=20, delay=1.0, de
         return True
     return False
 
-def clean_post_exit_popups(stop_flag=None, device_serial=None):
-    """Clean up post-exit popups by tapping known buttons, robust for slow emulators. Respects stop_flag if provided."""
+def clean_post_exit_popups(stop_flag=None, device_serial=None, middle_tap=True):
+    """Clean up post-exit popups by tapping known buttons, robust for slow emulators. Respects stop_flag if provided. Optionally taps the middle of the screen if middle_tap is True."""
     print("กำลังกดปิด popups...")
     attempts_without_finds = 0
     while attempts_without_finds < 5:
@@ -194,6 +194,7 @@ def clean_post_exit_popups(stop_flag=None, device_serial=None):
         else:
             attempts_without_finds = 0
         time.sleep(1)
+    if middle_tap:
+        adb_tap(480, 270, device_serial=device_serial)
     print("ปิด popups ทั้งหมดเรียบร้อย")
-    adb_tap(480, 270, device_serial=device_serial)
 

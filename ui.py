@@ -11,7 +11,7 @@ import config
 from simple_material_production import run_material_production_loop
 from auto_research_material import auto_research_material
 
-CURRENT_VERSION = "v1.0.9"
+CURRENT_VERSION = "v1.1.0"
 
 # === Global Control Flags ===
 event_thread = None

@@ -80,6 +80,10 @@ def run_dungeon_loop_simple(stop_flag):
                 if not stop_flag.is_set():
                     print("จบด่านเรียบร้อยแล้ว")
                 break
+            elif find_image_on_screen("alt_win_icon.png"):
+                if not stop_flag.is_set():
+                    print("จบด่านเรียบร้อยแล้ว")
+                break
             elif find_image_on_screen("skip_button.png"):
                 if not stop_flag.is_set():
                     print("เจอปุ่ม Skip → กดปุ่ม Skip ...")
