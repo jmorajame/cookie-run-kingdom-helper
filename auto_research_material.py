@@ -309,17 +309,12 @@ def auto_research_material(stop_flag, device_serial, research_type="castle", max
         
         # 5. Capture screen and find research icons
         capture_screen(device_serial=device_serial)
-        tapped_positions = set()
-        for research_icon in research_icons:
+        for research_icon in research_icons[:]:
             if stop_flag and stop_flag.is_set():
                 return False
             pos = find_image_on_screen(research_icon)
             if pos:
                 # Skip if this position was already tapped in this loop
-                if pos in tapped_positions:
-                    # print(f"[DEBUG] Skipping already tapped research icon at {pos}")
-                    continue
-                tapped_positions.add(pos)
                 print(f"🔍 เจอ icon: {os.path.basename(research_icon)} ที่ตำแหน่ง {pos}")
                 # 7. Click on the research image
                 wait_and_tap(research_icon, device_serial=device_serial)
@@ -329,12 +324,17 @@ def auto_research_material(stop_flag, device_serial, research_type="castle", max
                     # print("❌ research_found_icon did not appear after clicking research")
                     continue
                 print("✅ เข้ามาในหน้าวิจัยแล้ว")
+                research_icons.remove(research_icon)
                 # 9. Click on research_button and handle conditions
                 capture_screen(device_serial=device_serial)
                 research_btn_found = find_image_on_screen("research_button.png")
+                not_available_research_button = find_image_on_screen("not_available_research_button.png")
+                if not_available_research_button:
+                    print("❌ โนมน้ำตาลไม่พร้อมสำหรับวิจัย")
+                    break
                 if not research_btn_found:
                     print("📊 Research is still in progress (no research_button)")
-                    for close_attempt in range(10):
+                    for _ in range(10):
                         if stop_flag and stop_flag.is_set():
                             return False
                         if not find_image_on_screen("research_found_icon.png"):
@@ -348,23 +348,40 @@ def auto_research_material(stop_flag, device_serial, research_type="castle", max
                     continue
                 else:
                     print("🔬 กำลังตรวจสอบสถานะของวิจัยนี้...")
-                    for click_attempt in range(10):
-                        # print(" click_attempt: ", click_attempt)
-                        if stop_flag and stop_flag.is_set():
-                            return False
-                        wait_and_tap("research_button.png", device_serial=device_serial)
-                        time.sleep(0.3)
-                        capture_screen(device_serial=device_serial)
-                        not_enough = find_image_on_screen("not_enough_mats.png")
-                        not_available_to_research = find_image_on_screen("not_available_to_research.png")
-                        research_btn_still_there = find_image_on_screen("research_button.png")
-                        not_available_research_button = find_image_on_screen("not_available_research_button.png")
-                        if not_enough:
-                            print("❌ ไม่มีวัสดุพอสำหรับวิจัย")
-                            required_material = find_required_material(device_serial, stop_flag)
-                            # print(f"[DEBUG] required_material after detection: {required_material}")
-                            if required_material is None:
-                                #print("[DEBUG] No required material found, closing popups and continuing to next research slot.")
+                    # Check for required material before tapping research_button
+                    required_material = find_required_material(device_serial, stop_flag)
+                    if required_material:
+                        for click_attempt in range(10):
+                            if stop_flag and stop_flag.is_set():
+                                return False
+                            wait_and_tap("research_button.png", device_serial=device_serial)
+                            time.sleep(0.3)
+                            capture_screen(device_serial=device_serial)
+                            not_enough = find_image_on_screen("not_enough_mats.png")
+                            not_available_to_research = find_image_on_screen("not_available_to_research.png")
+                            research_btn_still_there = find_image_on_screen("research_button.png")
+                            if not_enough:
+                                print("❌ ไม่มีวัสดุพอสำหรับวิจัย")
+                                #required_material = find_required_material(device_serial, stop_flag)
+                                # if required_material is None:
+                                #     for close_attempt in range(10):
+                                #         if stop_flag and stop_flag.is_set():
+                                #             return False
+                                #         capture_screen(device_serial=device_serial)
+                                #         if not find_image_on_screen("not_enough_mats.png"):
+                                #             print("✅ ปิดหน้าวิจัยแล้ว")
+                                #             break
+                                #         close_positions = find_all_images_on_screen("quest_close_button.png")
+                                #         if close_positions:
+                                #             for idx, pos in enumerate(close_positions):
+                                #                 from utils import adb_tap
+                                #                 adb_tap(*pos, device_serial=device_serial)
+                                #                 time.sleep(0.5)
+                                #         else:
+                                #             time.sleep(0.3)
+                                #     tapped_positions.add(pos)
+                                #     break
+                                found_research = True
                                 for close_attempt in range(10):
                                     if stop_flag and stop_flag.is_set():
                                         return False
@@ -374,134 +391,105 @@ def auto_research_material(stop_flag, device_serial, research_type="castle", max
                                         break
                                     close_positions = find_all_images_on_screen("quest_close_button.png")
                                     if close_positions:
-                                        # print(f"[DEBUG] Attempting to close not_enough_mats popup for non material, attempt {close_attempt+1}, found {len(close_positions)} close buttons.")
                                         for idx, pos in enumerate(close_positions):
-                                            #print(f"[DEBUG] Tapping quest_close_button at {pos} (index {idx})")
+                                            from utils import adb_tap
+                                            adb_tap(*pos, device_serial=device_serial)
+                                            time.sleep(0.2)
+                                    else:
+                                        time.sleep(0.3)
+                                break
+                            elif not_available_to_research or not_available_research_button:
+                                print("❌ โนมน้ำตาลไม่พร้อมสำหรับวิจัย ,ปิดหน้าวิจัยแล้ว")
+                                collect_gnome = find_image_on_screen("collect_gnome.png")
+                                if collect_gnome:
+                                    print("🔍 กำลังกดโนมน้ำตาลที่วิจัยสำเร็จแล้ว...")
+                                    for _ in range(10):
+                                        if stop_flag and stop_flag.is_set():
+                                            return False
+                                        if not find_image_on_screen("collect_gnome.png"):
+                                            break
+                                        wait_and_tap("collect_gnome.png", device_serial=device_serial)
+                                        time.sleep(0.5)
+                                    center = (480, 270)
+                                    for attempt in range(10):
+                                        if stop_flag and stop_flag.is_set():
+                                            return False
+                                        capture_screen(device_serial=device_serial)
+                                        if find_image_on_screen("confirm_button.png"):
+                                            print("✅ พบปุ่มตกลงแล้ว")
+                                            break
+                                        check_positions = find_all_images_on_screen("check_button.png")
+                                        if check_positions:
+                                            closest_pos = min(check_positions, key=lambda p: (p[0] - center[0])**2 + (p[1] - center[1])**2)
+                                            from utils import adb_tap
+                                            adb_tap(*closest_pos, device_serial=device_serial)
+                                            time.sleep(0.5)
+                                            capture_screen(device_serial=device_serial)
+                                            check_positions_after = find_all_images_on_screen("check_button.png")
+                                            def is_same_button_gone(tapped, positions, tol=15):
+                                                return not any(abs(tapped[0]-p[0])<=tol and abs(tapped[1]-p[1])<=tol for p in positions)
+                                            if is_same_button_gone(closest_pos, check_positions_after):
+                                                break
+                                        else:
+                                            time.sleep(0.3)
+                                    time.sleep(0.5)
+                                    for _ in range(10):
+                                        if stop_flag and stop_flag.is_set():
+                                            return False
+                                        capture_screen(device_serial=device_serial)
+                                        if not find_image_on_screen("confirm_gnome_upgrade_button.png"):
+                                            break
+                                        wait_and_tap("confirm_gnome_upgrade_button.png", device_serial=device_serial)
+                                        time.sleep(0.5)
+                                    found_research = True
+                                    break
+                                for close_attempt in range(10):
+                                    if stop_flag and stop_flag.is_set():
+                                        return False
+                                    capture_screen(device_serial=device_serial)
+                                    if not find_image_on_screen("not_available_to_research.png"):
+                                        print("✅ ปิดหน้าวิจัยแล้ว")
+                                        break
+                                    close_positions = find_all_images_on_screen("quest_close_button.png")
+                                    if close_positions:
+                                        for idx, pos in enumerate(close_positions):
                                             from utils import adb_tap
                                             adb_tap(*pos, device_serial=device_serial)
                                             time.sleep(0.5)
                                     else:
-                                        # print(f"[DEBUG] quest_close_button not found for non material on attempt {close_attempt+1}")
                                         time.sleep(0.3)
-                                # print("[DEBUG] Finished not_enough_mats popup for non material closing loop.")
-                                tapped_positions.add(pos)
-                                break
-                            found_research = True
-                            for close_attempt in range(10):
-                                if stop_flag and stop_flag.is_set():
-                                    # print("[DEBUG] Stop flag set during not_enough_mats popup closing loop.")
-                                    return False
-                                capture_screen(device_serial=device_serial)
-                                if not find_image_on_screen("not_enough_mats.png"):
-                                    print("✅ ปิดหน้าวิจัยแล้ว")
-                                    break
-                                close_positions = find_all_images_on_screen("quest_close_button.png")
-                                if close_positions:
-                                    # print(f"[DEBUG] Attempting to close not_enough_mats popup, attempt {close_attempt+1}, found {len(close_positions)} close buttons.")
-                                    for idx, pos in enumerate(close_positions):
-                                        # print(f"[DEBUG] Tapping quest_close_button at {pos} (index {idx})")
-                                        from utils import adb_tap
-                                        adb_tap(*pos, device_serial=device_serial)
-                                        time.sleep(0.2)
-                                else:
-                                    # print(f"[DEBUG] quest_close_button not found on attempt {close_attempt+1}")
-                                    time.sleep(0.3)
-                            # print("[DEBUG] Finished not_enough_mats popup closing loop.")
-                            break
-                        elif not_available_to_research or not_available_research_button:
-                            print("❌ โนมน้ำตาลไม่พร้อมสำหรับวิจัย ,ปิดหน้าวิจัยแล้ว")
-                            collect_gnome = find_image_on_screen("collect_gnome.png")
-                            if collect_gnome:
-                                print("🔍 กำลังกดโนมน้ำตาลที่วิจัยสำเร็จแล้ว...")
-                                # Tap collect_gnome until it disappears
-                                for _ in range(10):
-                                    if stop_flag and stop_flag.is_set():
-                                        return False
-                                    if not find_image_on_screen("collect_gnome.png"):
-                                        # print("✅ collect_gnome button disappeared.")
-                                        break
-                                    wait_and_tap("collect_gnome.png", device_serial=device_serial)
-                                    time.sleep(0.5)
-                                # After collect_gnome disappears, tap check_button closest to center until confirm_button appears
-                                # print("🔍 Looking for check_button closest to center...")
-                                center = (480, 270)
-                                for attempt in range(10):
-                                    if stop_flag and stop_flag.is_set():
-                                        return False
-                                    capture_screen(device_serial=device_serial)
-                                    if find_image_on_screen("confirm_button.png"):
-                                        print("✅ พบปุ่มตกลงแล้ว")
-                                        break
-                                    check_positions = find_all_images_on_screen("check_button.png")
-                                    if check_positions:
-                                        closest_pos = min(check_positions, key=lambda p: (p[0] - center[0])**2 + (p[1] - center[1])**2)
-                                        # print(f"[DEBUG] Tapping check_button at {closest_pos}")
-                                        from utils import adb_tap
-                                        adb_tap(*closest_pos, device_serial=device_serial)
-                                        time.sleep(0.5)
-                                        # After tapping, check if the same button is gone (with tolerance)
-                                        capture_screen(device_serial=device_serial)
-                                        check_positions_after = find_all_images_on_screen("check_button.png")
-                                        def is_same_button_gone(tapped, positions, tol=15):
-                                            return not any(abs(tapped[0]-p[0])<=tol and abs(tapped[1]-p[1])<=tol for p in positions)
-                                        if is_same_button_gone(closest_pos, check_positions_after):
-                                            # print("✅ The tapped check_button disappeared after tap.")
-                                            break
-                                    else:
-                                        # print("[DEBUG] No check_button found, waiting...")
-                                        time.sleep(0.3)
-                                # Tap confirm_button until it disappears
-                                # print("🔍 Tapping confirm_button until it disappears...")
-                                time.sleep(0.5)
-                                for _ in range(10):
-                                    if stop_flag and stop_flag.is_set():
-                                        return False
-                                    capture_screen(device_serial=device_serial)
-                                    if not find_image_on_screen("confirm_gnome_upgrade_button.png"):
-                                        #print("✅ confirm_button disappeared.")
-                                        break
-                                    wait_and_tap("confirm_gnome_upgrade_button.png", device_serial=device_serial)
-                                    time.sleep(0.5)
                                 found_research = True
                                 break
-                            for close_attempt in range(10):
-                                if stop_flag and stop_flag.is_set():
-                                    return False
+                            elif not research_btn_still_there:
+                                print("✅ วิจัยเริ่มต้นสำเร็จ")
+                                time.sleep(1)
                                 capture_screen(device_serial=device_serial)
-                                if not find_image_on_screen("not_available_to_research.png"):
-                                    print("✅ ปิดหน้าวิจัยแล้ว")
-                                    break
-                                close_positions = find_all_images_on_screen("quest_close_button.png")
-                                if close_positions:
-                                    # print(f"[DEBUG] Attempting to close not_enough_mats popup for non material, attempt {close_attempt+1}, found {len(close_positions)} close buttons.")
-                                    for idx, pos in enumerate(close_positions):
-                                        # print(f"[DEBUG] Tapping quest_close_button at {pos} (index {idx})")
-                                        from utils import adb_tap
-                                        adb_tap(*pos, device_serial=device_serial)
-                                        time.sleep(0.5)
-                                else:
-                                    # print(f"[DEBUG] quest_close_button not found for non material on attempt {close_attempt+1}")
-                                    time.sleep(0.3)
-                            # print("[DEBUG] Finished not_enough_mats popup for non material closing loop.")
-                            found_research = True
-                            break
-                        elif not research_btn_still_there:
-                            print("✅ วิจัยเริ่มต้นสำเร็จ")
-                            # The game auto-closes the popup, so just wait and refresh
-                            time.sleep(1)
-                            capture_screen(device_serial=device_serial)
-                            continue
-                for close_attempt in range(10):
-                    if stop_flag and stop_flag.is_set():
-                        return False
-                    if not find_image_on_screen("research_found_icon.png"):
-                        print("✅ ปิดหน้าวิจัยแล้ว")
-                        break
-                    if find_image_on_screen("quest_close_button.png"):
-                        wait_and_tap("quest_close_button.png", device_serial=device_serial)
-                        time.sleep(0.3)
+                                continue
+                        for close_attempt in range(10):
+                            if stop_flag and stop_flag.is_set():
+                                return False
+                            if not find_image_on_screen("research_found_icon.png"):
+                                print("✅ ปิดหน้าวิจัยแล้ว")
+                                break
+                            if find_image_on_screen("quest_close_button.png"):
+                                wait_and_tap("quest_close_button.png", device_serial=device_serial)
+                                time.sleep(0.3)
+                            else:
+                                time.sleep(0.3)
                     else:
-                        time.sleep(0.3)
+                        # No required material found, close popups and continue
+                        for close_attempt in range(10):
+                            if stop_flag and stop_flag.is_set():
+                                return False
+                            if not find_image_on_screen("research_found_icon.png"):
+                                print("✅ ปิดหน้าวิจัยแล้ว")
+                                break
+                            if find_image_on_screen("quest_close_button.png"):
+                                wait_and_tap("quest_close_button.png", device_serial=device_serial)
+                                time.sleep(0.3)
+                            else:
+                                time.sleep(0.3)
+                        continue
             if found_research:
                 break
         
@@ -511,7 +499,7 @@ def auto_research_material(stop_flag, device_serial, research_type="castle", max
         # 8. If nothing found, scroll to the right
         print("6. ไม่พบวิจัยที่พร้อมสำหรับวิจัย, กำลังเลื่อนไปทางขวา...")
         adb_swipe(800, 400, 200, 400, duration_ms=800, device_serial=device_serial)
-        time.sleep(1)
+        time.sleep(3)
     
     if not found_research:
         print("❌ ไม่พบวิจัยที่พร้อมสำหรับวิจัย")

@@ -90,11 +90,18 @@ def get_tesseract_path():
 CASTLE_RESEARCH_ICON_NAMES = [
     "bakery_production.png",
     "biscuit_production.png",
+    "blue_jar.png",
     "cake_roll_production.png",
+    "coffee.png",
     "cookie_house_production.png",
+    "flower_production.png",
+    "milk.png",
+    "pot_production.png",
+    "red_yam_production.png",
     "sugar_gnome_craftmanship.png",
     "sugar_production.png",
     "tools_production.png",
+    "waterfall_production.png",
     "wood_production.png",
     "yam_production.png",
     "yelly_bean_production.png",
@@ -115,7 +122,13 @@ MATERIAL_ICON_NAMES = [
 ]
 
 COOKIE_RESEARCH_ICON_NAMES = [
+    "increase_bounty_reward.png",
+    "increase_def_ambush.png",
     "increase_def_attacker_slot.png",
+    "increase_def_bomber.png",
+    "increase_def_healer.png",
+    "increase_def_ranger.png",
+    "increase_def_support.png",
     "increase_hp_ambush_slot.png",
     "increase_hp_attacker_slot.png",
     "increase_hp_bomber_slot.png",
@@ -124,7 +137,9 @@ COOKIE_RESEARCH_ICON_NAMES = [
     "increase_hp_magic_slot.png",
     "increase_hp_ranger_slot.png",
     "increase_hp_support_slot.png",
+    "increase_overall_def.png",
     "increase_overall_hp.png",
+    "reduce_topping_price.png",
 ]
 
 # Button images for PyInstaller compatibility
